@@ -5,3 +5,4 @@ xgboost
 mlflow
 tldextract
 jupyter
+ucimlrepo
