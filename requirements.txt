@@ -6,3 +6,4 @@ mlflow
 tldextract
 jupyter
 ucimlrepo
+pytest
