@@ -1,0 +1,12 @@
+﻿venv/
+data/raw/*
+data/processed/*
+!data/raw/.gitkeep
+!data/processed/.gitkeep
+mlruns/
+mlartifacts/
+__pycache__/
+.ipynb_checkpoints/
+*.joblib
+*.pkl
+.env
