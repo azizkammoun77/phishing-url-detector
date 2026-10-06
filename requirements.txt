@@ -7,3 +7,4 @@ tldextract
 jupyter
 ucimlrepo
 pytest
+rapidfuzz

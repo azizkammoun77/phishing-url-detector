@@ -3,7 +3,9 @@ import math
 import pandas as pd
 import pytest
 
-from src.features import FEATURE_NAMES, extract_features, extract_features_df
+from src.features import (FEATURE_NAMES, _effective_name, extract_features,
+                          extract_features_df)
+
 
 
 def test_normal_domain():
@@ -102,3 +104,40 @@ def test_extract_features_df():
 ])
 def test_brand_impersonation_matching(hostname, expected):
     assert extract_features(hostname)["brand_impersonation"] == expected
+
+
+@pytest.mark.parametrize("hostname, lookalike, homoglyph", [
+    ("pytorch.github.io", 0, 0),
+    ("paypa1-verify.github.io", None, 1),  # also a distance-1 lookalike
+    ("paypai-login.com", 1, 0),
+    ("arnazon-support.com", None, 1),     # also a distance-2 lookalike
+    ("paypal.com", 0, 0),
+    ("microsoft.com", 0, 0),
+])
+def test_lookalike_and_homoglyph(hostname, lookalike, homoglyph):
+    f = extract_features(hostname)
+    if lookalike is not None:
+        assert f["name_brand_lookalike"] == lookalike
+    assert f["name_homoglyph_brand"] == homoglyph
+
+
+@pytest.mark.parametrize("hostname, expected", [
+    ("paypa1-verify.github.io", "paypa1-verify"),
+    ("mail.google.com", "google"),
+    ("a.b.netlify.app", "b"),
+    ("github.io", "github"),
+])
+def test_effective_name(hostname, expected):
+    from src.features import _extract
+    ext = _extract(hostname)
+    registered = ext.top_domain_under_public_suffix
+    assert _effective_name(registered, ext.subdomain, ext.domain) == expected
+
+
+def test_name_features():
+    f = extract_features("paypa1-verify.github.io")
+    assert f["name_length"] == 13
+    assert f["name_num_hyphens"] == 1
+    assert f["name_keyword_count"] == 1  # verify
+    assert f["name_digit_ratio"] == pytest.approx(1 / 13)
+    assert extract_features("mail.google.com")["name_length"] == 6
