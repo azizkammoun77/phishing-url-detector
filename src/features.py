@@ -5,6 +5,7 @@ tldextract is configured with its bundled suffix list, so it never goes online.
 """
 import ipaddress
 import math
+import re
 from collections import Counter
 
 import pandas as pd
@@ -18,10 +19,14 @@ BRAND_DOMAINS = {
     "paypal": {"paypal.com", "paypal.me"},
     "apple": {"apple.com", "icloud.com"},
     "microsoft": {"microsoft.com", "live.com", "office.com", "microsoftonline.com"},
-    "amazon": {"amazon.com", "amazon.co.uk", "amazon.de", "amazon.fr", "amazonaws.com"},
+    "amazon": {"amazon.com", "amazon.co.uk", "amazon.de", "amazon.fr", "amazon.in",
+               "amazonaws.com"},
     "netflix": {"netflix.com"},
-    "google": {"google.com", "google.co.uk", "google.fr", "google.de", "googleapis.com"},
-    "facebook": {"facebook.com", "fb.com"},
+    "google": {
+        "google.com", "google.co.uk", "google.fr", "google.de", "googleapis.com",
+        "gmail.com", "youtube.com",
+    },
+    "facebook": {"facebook.com", "fb.com", "facebookmail.com", "fbcdn.net"},
     "instagram": {"instagram.com"},
     "whatsapp": {"whatsapp.com", "whatsapp.net"},
     "dhl": {"dhl.com", "dhl.de"},
@@ -34,6 +39,13 @@ BRAND_DOMAINS = {
     "hsbc": {"hsbc.com", "hsbc.co.uk"},
     "barclays": {"barclays.com", "barclays.co.uk"},
 }
+
+# Short or ambiguous brand names: only a match when the brand is a whole token
+# of the hostname split on "." and "-" (so "pineapple" or "purchase" don't hit).
+# All other brands are distinctive enough for plain substring matching.
+WHOLE_TOKEN_BRANDS = frozenset({"apple", "chase", "dhl", "citibank", "hsbc", "outlook"})
+
+_TOKEN_SPLIT = re.compile(r"[.\-]")
 
 SUSPICIOUS_KEYWORDS = (
     "login", "secure", "verify", "account", "update",
@@ -58,7 +70,7 @@ _extract = tldextract.TLDExtract(suffix_list_urls=(), cache_dir=None)
 FEATURE_NAMES = (
     "hostname_length", "num_labels", "num_subdomain_levels", "num_digits",
     "digit_ratio", "num_hyphens", "longest_label_length", "domain_entropy",
-    "vowel_ratio", "is_ip", "is_punycode", "brand_in_subdomain",
+    "vowel_ratio", "is_ip", "is_punycode", "brand_impersonation",
     "suspicious_keyword_count", "is_free_hosting", "tld_risky",
 )
 
@@ -97,8 +109,10 @@ def extract_features(hostname: str) -> dict:
 
     num_digits = sum(ch.isdigit() for ch in hostname)
     hostname_length = len(hostname)
+    tokens = set(_TOKEN_SPLIT.split(hostname))
     brand_hit = any(
-        brand in hostname and registered not in real
+        registered not in real
+        and ((brand in tokens) if brand in WHOLE_TOKEN_BRANDS else (brand in hostname))
         for brand, real in BRAND_DOMAINS.items()
     )
 
@@ -117,7 +131,7 @@ def extract_features(hostname: str) -> dict:
         ),
         "is_ip": int(is_ip),
         "is_punycode": int("xn--" in hostname),
-        "brand_in_subdomain": int(brand_hit),
+        "brand_impersonation": int(brand_hit),
         "suspicious_keyword_count": sum(kw in hostname for kw in SUSPICIOUS_KEYWORDS),
         "is_free_hosting": int(registered in FREE_HOSTING_DOMAINS),
         "tld_risky": int(suffix.rsplit(".", 1)[-1] in RISKY_TLDS),

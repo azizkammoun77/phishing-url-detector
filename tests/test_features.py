@@ -15,7 +15,7 @@ def test_normal_domain():
     assert f["num_hyphens"] == 0
     assert f["longest_label_length"] == 7
     assert f["is_ip"] == 0 and f["is_punycode"] == 0
-    assert f["brand_in_subdomain"] == 0
+    assert f["brand_impersonation"] == 0
     assert f["suspicious_keyword_count"] == 0
     assert f["is_free_hosting"] == 0 and f["tld_risky"] == 0
     # "example": e x a m p l e -> 'e' appears twice among 7 chars
@@ -50,21 +50,21 @@ def test_punycode():
     assert extract_features("example.com")["is_punycode"] == 0
 
 
-def test_brand_in_subdomain_on_free_hosting():
+def test_brand_impersonation_on_free_hosting():
     f = extract_features("paypal-secure.web.app")
-    assert f["brand_in_subdomain"] == 1
+    assert f["brand_impersonation"] == 1
     assert f["is_free_hosting"] == 1
     assert f["suspicious_keyword_count"] == 1  # secure
     assert f["num_hyphens"] == 1
 
 
 def test_brand_on_lookalike_domain():
-    assert extract_features("paypal.com.evil-site.xyz")["brand_in_subdomain"] == 1
+    assert extract_features("paypal.com.evil-site.xyz")["brand_impersonation"] == 1
 
 
 def test_real_brand_domain_is_not_flagged():
-    assert extract_features("paypal.com")["brand_in_subdomain"] == 0
-    assert extract_features("login.microsoftonline.com")["brand_in_subdomain"] == 0
+    assert extract_features("paypal.com")["brand_impersonation"] == 0
+    assert extract_features("login.microsoftonline.com")["brand_impersonation"] == 0
 
 
 def test_co_uk_domain():
@@ -90,4 +90,15 @@ def test_extract_features_df():
     df = extract_features_df(s)
     assert list(df.columns) == list(FEATURE_NAMES)
     assert list(df.index) == [10, 20]
-    assert df.loc[20, "brand_in_subdomain"] == 1
+    assert df.loc[20, "brand_impersonation"] == 1
+
+
+@pytest.mark.parametrize("hostname, expected", [
+    ("purchase-guide.com", 0),       # "chase" only as a substring
+    ("pineapple-recipes.com", 0),    # "apple" only as a substring
+    ("chase-login.xyz", 1),          # whole token "chase"
+    ("paypalsecure-verify.com", 1),  # distinctive brand, substring match
+    ("facebookmail.com", 0),         # official facebook domain
+])
+def test_brand_impersonation_matching(hostname, expected):
+    assert extract_features(hostname)["brand_impersonation"] == expected
