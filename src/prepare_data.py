@@ -3,7 +3,6 @@
 URLs are treated strictly as text; nothing is ever visited or resolved.
 """
 import ipaddress
-import re
 import zipfile
 from pathlib import Path
 
@@ -12,6 +11,7 @@ import tldextract
 from sklearn.model_selection import StratifiedGroupKFold
 
 from src.features import FREE_HOSTING_DOMAINS
+from src.normalize import normalize_url_to_hostname
 
 ROOT = Path(__file__).resolve().parents[1]
 RAW_PATH = ROOT / "data" / "raw" / "phiusiil_urls.csv"
@@ -24,27 +24,10 @@ STRESS_PATH = ROOT / "data" / "stress" / "legit_subdomains.csv"
 TRANCO_TOP_N = 100_000
 MAX_PER_DOMAIN = 20
 
-SCHEME_RE = re.compile(r"^[a-z][a-z0-9+.\-]*://", re.IGNORECASE)
 RANDOM_STATE = 42
 
 # Bundled public suffix snapshot only: no network access.
 _extract = tldextract.TLDExtract(suffix_list_urls=(), cache_dir=None)
-
-
-def normalize_hostname(url: str) -> str:
-    """Return the lowercased host of a URL string (pure string handling)."""
-    s = str(url).strip()
-    s = SCHEME_RE.sub("", s)
-    host = re.split(r"[/?#]", s, maxsplit=1)[0]
-    host = host.rsplit("@", 1)[-1]  # drop user:password@
-    if host.startswith("["):  # bracketed IPv6, drop port after "]"
-        host = host.split("]", 1)[0].lstrip("[")
-    else:
-        host = host.split(":", 1)[0]  # drop port
-    host = host.lower()
-    if host.startswith("www."):
-        host = host[4:]
-    return host.rstrip(".")
 
 
 def registered_domain(hostname: str) -> str:
@@ -76,7 +59,7 @@ def build_umbrella_legit(phishing_hosts: set, stress_domains: set):
     def log(name, before, after):
         steps.append((name, before - after, after))
 
-    um["hostname"] = um["raw"].map(normalize_hostname)
+    um["hostname"] = um["raw"].map(normalize_url_to_hostname)
     um = um[um["hostname"] != ""]
     um = um.sort_values("rank").drop_duplicates("hostname")
     steps.append(("umbrella rows after normalization + dedupe", 0, len(um)))
@@ -122,7 +105,7 @@ def main() -> None:
     df = df.drop_duplicates(subset="url")
     log("drop exact duplicate URLs", n, len(df))
 
-    df["hostname"] = df["url"].map(normalize_hostname)
+    df["hostname"] = df["url"].map(normalize_url_to_hostname)
     n = len(df)
     df = df[df["hostname"] != ""]
     log("drop empty hostnames", n, len(df))

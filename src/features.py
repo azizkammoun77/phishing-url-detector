@@ -91,6 +91,14 @@ _HOMOGLYPH_CHARS = str.maketrans({"0": "o", "1": "l", "3": "e", "5": "s"})
 _LOOKALIKE_BRANDS = tuple(b for b in BRAND_DOMAINS if len(b) >= LOOKALIKE_MIN_BRAND_LEN)
 
 
+def registered_domain_of(hostname: str) -> str:
+    """Registered domain of a normalized hostname (the host itself for raw IPs)."""
+    hostname = str(hostname).strip().lower()
+    if _is_ip(hostname):
+        return hostname
+    return _extract(hostname).top_domain_under_public_suffix or hostname
+
+
 def _is_ip(hostname: str) -> bool:
     # Cheap pre-check so ordinary hostnames never hit the exception path.
     if ":" not in hostname and not hostname.replace(".", "").isdigit():

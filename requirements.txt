@@ -8,3 +8,7 @@ jupyter
 ucimlrepo
 pytest
 rapidfuzz
+fastapi
+uvicorn
+python-dotenv
+httpx
