@@ -2,6 +2,8 @@
 
 A production-style ML service that detects phishing URLs in real time, with explanations and drift monitoring.
 
+**Project report:** [docs/PROJECT_REPORT.md](docs/PROJECT_REPORT.md) - a plain-English walkthrough of the data, findings, results, API and monitoring.
+
 ## Project structure
 
 - `data/raw/` - original, untouched datasets (not tracked by Git).
