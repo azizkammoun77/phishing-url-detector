@@ -81,3 +81,13 @@ Example response:
 - `decision` is `safe` below the threshold, `phishing` at or above it, and `review` at or above it when the site is on a free-hosting domain (e.g. `github.io`), where the hostname alone cannot tell a real page from a phishing page.
 - `GET /health` needs no key. A wrong or missing `X-API-Key` returns 401.
 - Each prediction appends one line (timestamp, hostname, probability, decision, model version) to `logs/predictions.jsonl`. Only the hostname is logged, never the full URL.
+
+### Prediction log
+
+Every request appends one JSON line (`request_id`, `timestamp`, `hostname`, `probability`, `decision`, `model_version`; never the full URL) to `logs/predictions.jsonl`. Set the `LOG_PATH` environment variable to write somewhere else. The same `request_id` is returned in the `X-Request-ID` response header so predictions can later be joined with labels.
+
+## Monitoring (simulated traffic)
+
+1. `python -m src.check_calibration` - Brier score, reliability table and ECE on the test set (`reports/calibration.png`).
+2. `python -m src.simulate_traffic` - **simulation**: 30 days x 2,000 requests sampled from the test set (never train) through the real API, into `logs/simulated_predictions.jsonl`; true labels go separately to `logs/simulated_labels.csv`. Takes about 25 minutes.
+3. `python -m src.monitor` (or run `notebooks/03_monitoring.ipynb`) - drift checks, label-free performance estimation (CBPE), realized performance, alerts, and charts in `reports/`.

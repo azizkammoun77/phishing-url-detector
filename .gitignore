@@ -12,3 +12,5 @@ __pycache__/
 .env
 mlflow.db
 logs/
+# Simulated/real prediction logs and labels are never committed. Charts in reports/*.png are
+# committed on purpose (not ignored).

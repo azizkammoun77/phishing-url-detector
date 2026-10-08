@@ -18,9 +18,9 @@ def log_path(tmp_path_factory):
 
 @pytest.fixture(scope="module")
 def client(log_path):
-    old = {k: os.environ.get(k) for k in ("API_KEY", "PREDICTION_LOG")}
+    old = {k: os.environ.get(k) for k in ("API_KEY", "LOG_PATH")}
     os.environ["API_KEY"] = TEST_KEY
-    os.environ["PREDICTION_LOG"] = str(log_path)
+    os.environ["LOG_PATH"] = str(log_path)
     from src.api import app
     try:
         with TestClient(app) as c:  # runs lifespan: loads the model once
@@ -105,6 +105,18 @@ def test_log_line_has_hostname_only(client, log_path):
     text = log_path.read_text(encoding="utf-8")
     assert secret not in text and "https://" not in text and "?k=" not in text
     record = json.loads(text.strip().splitlines()[-1])
-    assert set(record) == {"timestamp", "hostname", "probability", "decision",
-                           "model_version"}
+    assert set(record) == {"request_id", "timestamp", "hostname", "probability",
+                           "decision", "model_version"}
     assert record["hostname"] == "logtest.example.org"
+
+
+def test_request_id_is_unique_and_matches_log(client, log_path):
+    ids = []
+    for _ in range(2):
+        r = client.post("/check-url", json={"url": "https://idtest.example.org/"},
+                        headers=AUTH)
+        ids.append(r.headers["X-Request-ID"])
+    assert ids[0] != ids[1]
+    logged = [json.loads(line)["request_id"]
+              for line in log_path.read_text(encoding="utf-8").splitlines()]
+    assert logged[-2:] == ids

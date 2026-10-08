@@ -8,6 +8,7 @@ import logging
 import os
 import secrets
 import threading
+import uuid
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from pathlib import Path
@@ -16,7 +17,7 @@ import mlflow
 import mlflow.pyfunc
 import pandas as pd
 from dotenv import load_dotenv
-from fastapi import Depends, FastAPI, Header, HTTPException, Request
+from fastapi import Depends, FastAPI, Header, HTTPException, Request, Response
 from mlflow import MlflowClient
 from pydantic import BaseModel, Field
 
@@ -34,6 +35,11 @@ MAX_HOSTNAME_LEN = 253
 
 logger = logging.getLogger("phishing_api")
 _log_lock = threading.Lock()
+
+
+def utc_now() -> datetime:
+    """Clock used for log timestamps (a module-level hook so simulations can replace it)."""
+    return datetime.now(timezone.utc)
 
 
 @asynccontextmanager
@@ -99,12 +105,16 @@ def get_signals(hostname: str) -> list[str]:
     return signals
 
 
-def write_prediction_log(hostname: str, probability: float, decision: str,
-                         model_version: str) -> None:
-    """Append one JSON line. Hostname only: never the full URL."""
-    path = Path(os.environ.get("PREDICTION_LOG", DEFAULT_LOG_PATH))
-    record = {"timestamp": datetime.now(timezone.utc).isoformat(), "hostname": hostname,
-              "probability": probability, "decision": decision,
+def write_prediction_log(request_id: str, hostname: str, probability: float,
+                         decision: str, model_version: str) -> None:
+    """Append one JSON line. Hostname only: never the full URL.
+
+    The file is LOG_PATH (environment variable, read per request), default
+    logs/predictions.jsonl. request_id lets predictions be joined with labels later.
+    """
+    path = Path(os.environ.get("LOG_PATH") or DEFAULT_LOG_PATH)
+    record = {"request_id": request_id, "timestamp": utc_now().isoformat(),
+              "hostname": hostname, "probability": probability, "decision": decision,
               "model_version": model_version}
     try:
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -122,7 +132,7 @@ def health(request: Request):
 
 @app.post("/check-url", response_model=CheckUrlResponse,
           dependencies=[Depends(require_api_key)])
-def check_url(body: CheckUrlRequest, request: Request):
+def check_url(body: CheckUrlRequest, request: Request, response: Response):
     hostname = normalize_url_to_hostname(body.url)
     if (not hostname or len(hostname) > MAX_HOSTNAME_LEN
             or any(ch.isspace() or ord(ch) < 32 for ch in hostname)):
@@ -138,7 +148,9 @@ def check_url(body: CheckUrlRequest, request: Request):
     else:
         decision = "phishing"
 
-    write_prediction_log(hostname, probability, decision, state.model_version)
+    request_id = uuid.uuid4().hex
+    response.headers["X-Request-ID"] = request_id
+    write_prediction_log(request_id, hostname, probability, decision, state.model_version)
     return CheckUrlResponse(
         hostname=hostname, decision=decision, probability=round(probability, 4),
         threshold=round(state.threshold, 4), signals=get_signals(hostname),
